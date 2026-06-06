@@ -1,3 +1,5 @@
+mod upload_server; // 手机端图片上传 HTTP 服务器模块
+
 use std::fs;
 use std::path::PathBuf;
 
@@ -65,7 +67,10 @@ pub fn run() {
   tauri::Builder::default()
     .plugin(tauri_plugin_dialog::init())
     .invoke_handler(tauri::generate_handler![
-      read_file_base64,   // 新增：凭证图片读取命令
+      read_file_base64,           // 凭证图片读取命令
+      upload_server::start_upload_server,   // 启动手机上传服务器
+      upload_server::stop_upload_server,    // 停止手机上传服务器
+      upload_server::poll_uploaded_file,    // 轮询上传完成的文件
       read_file_bytes,
       write_file_bytes,
       check_exists,

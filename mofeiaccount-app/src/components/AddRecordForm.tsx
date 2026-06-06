@@ -15,6 +15,7 @@ import { open } from '@tauri-apps/plugin-dialog';
 import { calculatePreviewBalance } from '../services/balance';
 import { generateId, getCurrentTimeStr } from '../services/excel';
 import { copyVoucher } from '../services/voucher';
+import { MobileUploadModal } from './MobileUploadModal';
 import type { AccountRecord } from '../types/account';
 import type { ToastMessage } from './Toast';
 
@@ -37,7 +38,8 @@ export function AddRecordForm({
   const [incomeStr, setIncomeStr] = useState('0');
   const [expenseStr, setExpenseStr] = useState('0');
   const [description, setDescription] = useState('');
-  const [voucherSource, setVoucherSource] = useState(''); // 用户选中的源图片路径
+  const [voucherSource, setVoucherSource] = useState(''); // 用户选中的源图片路径（电脑端选择或手机上传）
+  const [mobileUploadVisible, setMobileUploadVisible] = useState(false); // 手机上传弹窗状态
   const [saving, setSaving] = useState(false);
 
   // 实时计算预览结余
@@ -56,7 +58,7 @@ export function AddRecordForm({
     return null;
   }, [customerName, incomeStr, expenseStr, income, expense]);
 
-  // 选择凭证图片
+  // 选择凭证图片（电脑端本地文件选择器）
   const handleSelectVoucher = async () => {
     try {
       const selected = await open({
@@ -76,6 +78,13 @@ export function AddRecordForm({
     } catch {
       onAddToast('error', '打开文件选择器失败');
     }
+  };
+
+  // 手机上传完成后回填凭证路径
+  const handleMobileFileUploaded = (filePath: string) => {
+    setVoucherSource(filePath);
+    setMobileUploadVisible(false);
+    onAddToast('success', '手机凭证图片已上传');
   };
 
   // 保存
@@ -194,12 +203,19 @@ export function AddRecordForm({
           />
         </div>
 
-        {/* 凭证上传 */}
+        {/* 凭证上传 — 支持电脑本地选择 + 手机扫码上传两种方式 */}
         <div style={{ gridColumn: '1 / -1' }}>
           <label style={labelStyle}>凭证图片</label>
           <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
             <button type="button" style={secondaryBtnStyle} onClick={handleSelectVoucher}>
               选择凭证
+            </button>
+            <button
+              type="button"
+              style={{ ...secondaryBtnStyle, color: '#1890ff', borderColor: '#1890ff' }}
+              onClick={() => setMobileUploadVisible(true)}
+            >
+              手机上传
             </button>
             {voucherSource && (
               <span style={{ fontSize: 13, color: '#666' }}>
@@ -224,6 +240,14 @@ export function AddRecordForm({
           {saving ? '保存中…' : '保存'}
         </button>
       </div>
+
+      {/* 手机上传弹窗 */}
+      <MobileUploadModal
+        visible={mobileUploadVisible}
+        saveDir={[workDir.replace(/\\/g, '/').replace(/\/$/, ''), 'vouchers'].join('/')}
+        onFileUploaded={handleMobileFileUploaded}
+        onClose={() => setMobileUploadVisible(false)}
+      />
     </div>
   );
 }
