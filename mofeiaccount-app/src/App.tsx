@@ -9,7 +9,7 @@
  * 生命周期：启动时自动初始化工作目录 → 加载 Excel 数据 → 展示界面
  */
 
-import { useEffect, useState, useCallback } from 'react';
+import { useEffect, useState, useCallback, useMemo } from 'react';
 import { useAppState } from './hooks/useAppState';
 import { AddRecordForm } from './components/AddRecordForm';
 import { RecordTable } from './components/RecordTable';
@@ -35,6 +35,37 @@ function App() {
   const { toasts, addToast, removeToast } = useToast();
   const [editTarget, setEditTarget] = useState<AccountRecord | null>(null);
   const [initialized, setInitialized] = useState(false);
+
+  // 筛选状态
+  const [filterDateStart, setFilterDateStart] = useState('');
+  const [filterDateEnd, setFilterDateEnd] = useState('');
+  const [filterCustomerName, setFilterCustomerName] = useState('');
+
+  // 基于筛选条件过滤 records
+  const filteredRecords = useMemo(() => {
+    return records.filter((r) => {
+      // 日期范围筛选：time 格式为 "YYYY-MM-DD HH:mm:ss"，取前 10 位与起止日期比较
+      if (filterDateStart) {
+        if (r.time.slice(0, 10) < filterDateStart) return false;
+      }
+      if (filterDateEnd) {
+        if (r.time.slice(0, 10) > filterDateEnd) return false;
+      }
+      // 客户名称搜索：不区分大小写子串匹配
+      if (filterCustomerName.trim()) {
+        const keyword = filterCustomerName.trim().toLowerCase();
+        if (!r.customerName.toLowerCase().includes(keyword)) return false;
+      }
+      return true;
+    });
+  }, [records, filterDateStart, filterDateEnd, filterCustomerName]);
+
+  // 清除所有筛选条件
+  const handleClearFilters = () => {
+    setFilterDateStart('');
+    setFilterDateEnd('');
+    setFilterCustomerName('');
+  };
 
   // 启动时初始化
   useEffect(() => {
@@ -152,7 +183,7 @@ function App() {
           gap: 24,
           margin: '20px 0',
         }}>
-          <StatCard label="总账目数" value={`${records.length} 笔`} />
+          <StatCard label="总账目数" value={`${filteredRecords.length} 笔`} />
           <StatCard
             label="最新结余"
             value={`${getLastBalance().toFixed(2)} 元`}
@@ -170,8 +201,68 @@ function App() {
           <h2 style={{ margin: '0 0 16px 0', fontSize: 18 }}>
             账目流水
           </h2>
+
+          {/* 筛选栏 */}
+          <div style={{
+            display: 'flex',
+            alignItems: 'center',
+            gap: 12,
+            marginBottom: 16,
+            padding: '10px 14px',
+            backgroundColor: '#fafafa',
+            borderRadius: 6,
+            flexWrap: 'wrap',
+          }}>
+            <label style={{ fontSize: 13, color: '#666', whiteSpace: 'nowrap' }}>
+              日期范围:
+            </label>
+            <input
+              type="date"
+              value={filterDateStart}
+              onChange={(e) => setFilterDateStart(e.target.value)}
+              style={filterInputStyle}
+            />
+            <span style={{ color: '#999', fontSize: 13 }}>至</span>
+            <input
+              type="date"
+              value={filterDateEnd}
+              onChange={(e) => setFilterDateEnd(e.target.value)}
+              style={filterInputStyle}
+            />
+            <label style={{ fontSize: 13, color: '#666', whiteSpace: 'nowrap', marginLeft: 8 }}>
+              客户名称:
+            </label>
+            <input
+              type="text"
+              value={filterCustomerName}
+              onChange={(e) => setFilterCustomerName(e.target.value)}
+              placeholder="搜索客户…"
+              style={{ ...filterInputStyle, width: 140 }}
+            />
+            <button
+              style={{
+                padding: '5px 14px',
+                backgroundColor: '#fff',
+                color: '#666',
+                border: '1px solid #d9d9d9',
+                borderRadius: 4,
+                fontSize: 13,
+                cursor: 'pointer',
+                marginLeft: 4,
+              }}
+              onClick={handleClearFilters}
+            >
+              清除筛选
+            </button>
+            <span style={{ fontSize: 12, color: '#999', marginLeft: 4 }}>
+              {filteredRecords.length !== records.length
+                ? `显示 ${filteredRecords.length} / ${records.length} 条`
+                : `共 ${records.length} 条`}
+            </span>
+          </div>
+
           <RecordTable
-            records={records}
+            records={filteredRecords}
             workDir={workDir ?? ''}
             onEdit={handleEdit}
           />
@@ -193,6 +284,15 @@ function App() {
     </div>
   );
 }
+
+const filterInputStyle: React.CSSProperties = {
+  padding: '5px 8px',
+  border: '1px solid #d9d9d9',
+  borderRadius: 4,
+  fontSize: 13,
+  outline: 'none',
+  boxSizing: 'border-box',
+};
 
 /** 统计卡片小组件 */
 function StatCard({

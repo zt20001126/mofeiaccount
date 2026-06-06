@@ -77,6 +77,13 @@ export function MobileUploadModal({
   const startPolling = useCallback(() => {
     if (pollTimerRef.current) clearInterval(pollTimerRef.current);
 
+    // 先登记磁盘上已有的上传文件，避免把旧文件误判为新上传
+    invoke<string[]>('poll_uploaded_file', { dir: saveDir }).then((existing) => {
+      for (const filePath of existing) {
+        uploadedFilesRef.current.add(filePath);
+      }
+    });
+
     pollTimerRef.current = setInterval(async () => {
       try {
         // 调用 Rust 命令列出目录中所有 mobile_upload_ 开头的文件

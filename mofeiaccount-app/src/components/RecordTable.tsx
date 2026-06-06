@@ -51,7 +51,6 @@ export function RecordTable({ records, workDir, onEdit }: RecordTableProps) {
         }}>
           <thead>
             <tr style={{ backgroundColor: '#fafafa', borderBottom: '2px solid #e8e8e8' }}>
-              <th style={thStyle}>账目ID</th>
               <th style={thStyle}>记账时间</th>
               <th style={thStyle}>客户名称</th>
               <th style={thStyle}>收款金额</th>
@@ -65,7 +64,6 @@ export function RecordTable({ records, workDir, onEdit }: RecordTableProps) {
           <tbody>
             {records.map((record) => (
               <tr key={record.id} style={{ borderBottom: '1px solid #f0f0f0' }}>
-                <td style={tdStyle}>{record.id}</td>
                 <td style={tdStyle}>{record.time}</td>
                 <td style={tdStyle}>{record.customerName}</td>
                 <td style={{ ...tdStyle, textAlign: 'right' }}>
