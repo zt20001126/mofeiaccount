@@ -20,30 +20,26 @@ function joinPath(base: string, ...parts: string[]): string {
 
 /**
  * 将用户选中的图片复制到工作目录的 vouchers 文件夹
+ *
+ * @param sourcePath 用户选中的图片绝对路径
+ * @param recordId   账目 ID（用作文件名）
+ * @param workDir    工作目录绝对路径
+ * @returns 凭证图片的相对路径（写入 Excel 的值，如 ./vouchers/TX202606060001.png）
  */
 export async function copyVoucher(
   sourcePath: string,
   recordId: string,
   workDir: string,
 ): Promise<string> {
+  // 提取源文件扩展名
   const extMatch = sourcePath.match(/\.([a-zA-Z0-9]+)$/);
   const ext = extMatch ? extMatch[1] : 'png';
   const fileName = `${recordId}.${ext}`;
 
   const destPath = joinPath(workDir, 'vouchers', fileName);
 
+  // 通过 Rust 命令复制文件
   await copyFileCmd(sourcePath, destPath);
 
   return `${VOUCHER_RELATIVE_PREFIX}${fileName}`;
-}
-
-/**
- * 根据相对路径和 workDir 拼接凭证图片的绝对路径
- */
-export function resolveVoucherPath(
-  relativePath: string,
-  workDir: string,
-): string {
-  const fileName = relativePath.replace(/^\.\/vouchers\//, '');
-  return joinPath(workDir, 'vouchers', fileName);
 }

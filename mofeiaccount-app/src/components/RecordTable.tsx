@@ -10,7 +10,6 @@
 
 import { useState } from 'react';
 import type { AccountRecord } from '../types/account';
-import { resolveVoucherPath } from '../services/voucher';
 import { VoucherPreview } from './VoucherPreview';
 
 interface RecordTableProps {
@@ -20,16 +19,13 @@ interface RecordTableProps {
 }
 
 export function RecordTable({ records, workDir, onEdit }: RecordTableProps) {
-  const [previewPath, setPreviewPath] = useState<string | null>(null);
+  // 当前预览的凭证相对路径（null 表示关闭弹窗）
+  const [previewRelativePath, setPreviewRelativePath] = useState<string | null>(null);
 
-  const handlePreviewVoucher = async (record: AccountRecord) => {
+  /** 点击凭证链接打开预览弹窗 */
+  const handlePreviewVoucher = (record: AccountRecord) => {
     if (!record.voucher) return;
-    try {
-      const absPath = await resolveVoucherPath(record.voucher, workDir);
-      setPreviewPath(absPath);
-    } catch {
-      setPreviewPath(null);
-    }
+    setPreviewRelativePath(record.voucher);
   };
 
   if (records.length === 0) {
@@ -123,9 +119,10 @@ export function RecordTable({ records, workDir, onEdit }: RecordTableProps) {
       </div>
 
       <VoucherPreview
-        visible={!!previewPath}
-        imagePath={previewPath || ''}
-        onClose={() => setPreviewPath(null)}
+        visible={!!previewRelativePath}
+        workDir={workDir}
+        relativePath={previewRelativePath || ''}
+        onClose={() => setPreviewRelativePath(null)}
       />
     </>
   );

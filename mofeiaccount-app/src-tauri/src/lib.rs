@@ -1,6 +1,31 @@
 use std::fs;
 use std::path::PathBuf;
 
+/// 读取文件二进制内容，返回 base64 编码字符串和对应的 MIME 类型
+/// 用于前端 <img> 标签通过 data:image/...;base64,... 直接内联显示凭证图片
+#[tauri::command]
+fn read_file_base64(path: String) -> Result<(String, String), String> {
+    // 读取文件二进制
+    let data = fs::read(&path).map_err(|e| format!("读取文件失败: {}", e))?;
+
+    // 根据文件扩展名判断 MIME 类型
+    let path_lower = path.to_lowercase();
+    let mime = if path_lower.ends_with(".png") {
+        "image/png".to_string()
+    } else if path_lower.ends_with(".jpg") || path_lower.ends_with(".jpeg") {
+        "image/jpeg".to_string()
+    } else {
+        // 未知格式默认当作 png 处理
+        "image/png".to_string()
+    };
+
+    // 使用 base64 引擎编码二进制数据
+    use base64::Engine;
+    let encoded = base64::engine::general_purpose::STANDARD.encode(&data);
+
+    Ok((mime, encoded))
+}
+
 #[tauri::command]
 fn read_file_bytes(path: String) -> Result<Vec<u8>, String> {
     fs::read(&path).map_err(|e| format!("读取文件失败: {}", e))
@@ -40,6 +65,7 @@ pub fn run() {
   tauri::Builder::default()
     .plugin(tauri_plugin_dialog::init())
     .invoke_handler(tauri::generate_handler![
+      read_file_base64,   // 新增：凭证图片读取命令
       read_file_bytes,
       write_file_bytes,
       check_exists,
