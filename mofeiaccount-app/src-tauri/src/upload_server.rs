@@ -76,28 +76,15 @@ pub fn start_upload_server(save_dir: String) -> Result<(u16, String), String> {
                                 );
                             let _ = request.respond(response);
                         }
-                        // POST /upload — 接收图片文件
+                        // POST /upload — 接收图片文件（base64 JSON 格式）
                         ("POST", "/upload") => {
-                            // 先从 request 中读取请求体和 content-type
-                            let ct = request
-                                .headers()
-                                .iter()
-                                .find(|h| {
-                                    h.field.as_str().as_str().to_lowercase()
-                                        == "content-type"
-                                })
-                                .map(|h| {
-                                    // tiny_http 的 HeaderValue 实现了 AsRef<str>
-                                    let s: &str = h.value.as_str().as_ref();
-                                    s.to_string()
-                                });
-
+                            // 读取请求体（JSON 文本）
                             let mut body = Vec::new();
-                            // tiny_http Request 的 as_reader 返回借用，需要先读完
                             let _ = request.as_reader().read_to_end(&mut body);
+                            let json_str = String::from_utf8_lossy(&body);
 
-                            // 保存文件
-                            match save_uploaded_file(&body, &ct, &save_dir_clone) {
+                            // 解析 JSON 并保存文件
+                            match save_uploaded_file_from_json(&json_str, &save_dir_clone) {
                                 Ok(file_name) => {
                                     *last_uploaded_clone.lock().unwrap() =
                                         Some(file_name);
@@ -161,21 +148,40 @@ pub fn poll_uploaded_file() -> Result<Option<String>, String> {
     Ok(None)
 }
 
-/// 保存上传的图片文件到磁盘
-fn save_uploaded_file(
-    body: &[u8],
-    content_type: &Option<String>,
+/// 从 JSON 字符串中解析 base64 图片数据并保存到磁盘
+///
+/// 前端发送的 JSON 格式：{ "filename": "xxx.jpg", "mime": "image/jpeg", "data": "base64..." }
+fn save_uploaded_file_from_json(
+    json_str: &str,
     save_dir: &str,
 ) -> Result<String, String> {
-    if body.is_empty() {
-        return Err("未接收到图片数据".to_string());
+    // 解析 JSON
+    let parsed: serde_json::Value =
+        serde_json::from_str(json_str).map_err(|e| format!("JSON 解析失败: {}", e))?;
+
+    // 提取 base64 数据
+    let base64_str = parsed["data"]
+        .as_str()
+        .ok_or("缺少 data 字段")?;
+
+    // 解码 base64 → 二进制
+    use base64::Engine;
+    let image_data = base64::engine::general_purpose::STANDARD
+        .decode(base64_str)
+        .map_err(|e| format!("base64 解码失败: {}", e))?;
+
+    if image_data.is_empty() {
+        return Err("图片数据为空".to_string());
     }
 
-    // 根据 Content-Type 判断文件扩展名
-    let ext = match content_type {
-        Some(ct) if ct.contains("image/png") => "png",
-        Some(ct) if ct.contains("image/jpeg") || ct.contains("image/jpg") => "jpg",
-        _ => "png", // 默认 png
+    // 根据 MIME 类型决定文件扩展名
+    let mime = parsed["mime"].as_str().unwrap_or("image/png");
+    let ext = if mime.contains("image/png") {
+        "png"
+    } else if mime.contains("image/jpeg") || mime.contains("image/jpg") {
+        "jpg"
+    } else {
+        "png"
     };
 
     // 生成带时间戳的唯一文件名
@@ -186,7 +192,9 @@ fn save_uploaded_file(
     let file_name = format!("mobile_upload_{}.{}", timestamp, ext);
     let file_path = PathBuf::from(save_dir).join(&file_name);
 
-    fs::write(&file_path, body).map_err(|e| format!("保存图片失败: {}", e))?;
+    // 写入磁盘
+    fs::write(&file_path, &image_data)
+        .map_err(|e| format!("保存图片失败: {}", e))?;
 
     Ok(file_path.to_string_lossy().to_string())
 }
@@ -277,16 +285,24 @@ reader.readAsDataURL(file)
 btnUpload.addEventListener('click',function(){
 if(!selectedFile)return;
 btnUpload.disabled=true;btnUpload.textContent='上传中…';showStatus('正在传输…','loading');
+
+// 将文件转为 base64，通过 JSON 格式发送（避免 tiny_http 二进制传输问题）
+var reader=new FileReader();
+reader.onload=function(e){
+var base64=e.target.result.split(',')[1]; // 去掉 "data:image/...;base64," 前缀
+var json=JSON.stringify({filename:selectedFile.name,mime:selectedFile.type,data:base64});
 var xhr=new XMLHttpRequest();
-xhr.open('POST','/upload?filename='+encodeURIComponent(selectedFile.name));
-xhr.setRequestHeader('Content-Type',selectedFile.type);
+xhr.open('POST','/upload');
+xhr.setRequestHeader('Content-Type','text/plain;charset=UTF-8');
 xhr.onload=function(){
 btnUpload.disabled=false;btnUpload.textContent='上传到电脑';
 if(xhr.status===200){showStatus('上传成功！可以在电脑上继续操作了','success');btnUpload.style.display='none'}
 else{showStatus('上传失败，请重试','error')}
 };
 xhr.onerror=function(){btnUpload.disabled=false;btnUpload.textContent='上传到电脑';showStatus('网络错误，请检查 WiFi 连接','error')};
-xhr.send(selectedFile)
+xhr.send(json)
+};
+reader.readAsDataURL(selectedFile)
 });
 
 function showStatus(msg,cls){statusEl.textContent=msg;statusEl.className=cls}
