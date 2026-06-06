@@ -8,13 +8,18 @@
  *   - error: 全局错误信息
  */
 
-import { useState, useCallback, useEffect } from 'react';
+import { useState, useCallback } from 'react';
 import type { AccountRecord } from '../types/account';
 import { initWorkDir } from '../services/config';
-import { readRecords, writeRecords } from '../services/excel';
+import { readRecords, writeRecords, LEDGER_FILENAME } from '../services/excel';
 import { recalculateBalances } from '../services/balance';
-import { join } from '@tauri-apps/api/path';
-import { LEDGER_FILENAME } from '../services/excel';
+
+/** 拼接路径（与 config.ts 保持一致） */
+function joinPath(base: string, ...parts: string[]): string {
+  const normalized = base.replace(/\\/g, '/').replace(/\/$/, '');
+  const segments = parts.map((p) => p.replace(/\\/g, '/').replace(/^\/+/, ''));
+  return [normalized, ...segments].join('/');
+}
 
 export function useAppState() {
   const [workDir, setWorkDir] = useState<string | null>(null);
@@ -22,16 +27,13 @@ export function useAppState() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  /** 初始化：选择工作目录并加载数据 */
   const initialize = useCallback(async () => {
     try {
       setLoading(true);
       setError(null);
-
       const dir = await initWorkDir();
       setWorkDir(dir);
-
-      const ledgerPath = await join(dir, LEDGER_FILENAME);
+      const ledgerPath = joinPath(dir, LEDGER_FILENAME);
       const data = await readRecords(ledgerPath);
       setRecords(data);
     } catch (e) {
@@ -42,38 +44,32 @@ export function useAppState() {
     }
   }, []);
 
-  /** 新增一条账目，自动写入后端 */
   const addRecord = useCallback(async (record: AccountRecord) => {
     if (!workDir) return;
     try {
       setLoading(true);
       setError(null);
-
       const newRecords = [...records, record];
       const recalculated = recalculateBalances(newRecords);
-      const ledgerPath = await join(workDir, LEDGER_FILENAME);
+      const ledgerPath = joinPath(workDir, LEDGER_FILENAME);
       await writeRecords(recalculated, ledgerPath);
       setRecords(recalculated);
     } catch (e) {
       const msg = e instanceof Error ? e.message : String(e);
       setError(msg);
-      throw e; // 让调用方知道失败了
+      throw e;
     } finally {
       setLoading(false);
     }
   }, [records, workDir]);
 
-  /** 修改一笔历史账目，接收更新后的全量列表 */
-  const updateRecord = useCallback(async (
-    updatedRecords: AccountRecord[],
-  ) => {
+  const updateRecord = useCallback(async (updatedRecords: AccountRecord[]) => {
     if (!workDir) return;
     try {
       setLoading(true);
       setError(null);
-
       const recalculated = recalculateBalances(updatedRecords);
-      const ledgerPath = await join(workDir, LEDGER_FILENAME);
+      const ledgerPath = joinPath(workDir, LEDGER_FILENAME);
       await writeRecords(recalculated, ledgerPath);
       setRecords(recalculated);
     } catch (e) {
@@ -85,13 +81,11 @@ export function useAppState() {
     }
   }, [workDir]);
 
-  /** 获取上笔结余 */
   const getLastBalance = useCallback((): number => {
     if (records.length === 0) return 0;
     return records[records.length - 1].balance;
   }, [records]);
 
-  /** 清除错误 */
   const clearError = useCallback(() => setError(null), []);
 
   return {

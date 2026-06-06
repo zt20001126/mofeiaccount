@@ -3,7 +3,7 @@
  * 支持 success / error / info 三种类型
  */
 
-import { useEffect, useState } from 'react';
+import { useState } from 'react';
 
 export interface ToastMessage {
   id: number;

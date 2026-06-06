@@ -17,7 +17,6 @@ import { EditRecordModal } from './components/EditRecordModal';
 import { ToastContainer, useToast } from './components/Toast';
 import { LoadingOverlay } from './components/LoadingOverlay';
 import { changeWorkDir } from './services/config';
-import { copyVoucher } from './services/voucher';
 import type { AccountRecord } from './types/account';
 
 function App() {
