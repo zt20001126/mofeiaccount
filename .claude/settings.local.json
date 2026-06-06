@@ -1,0 +1,18 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(npm --version)",
+      "Bash(cargo --version)",
+      "Bash(curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs)",
+      "Bash(sh -s -- -y)",
+      "Bash(npm install *)",
+      "Bash(npx vitest *)",
+      "Read(//c/Program Files/**)",
+      "Read(//c/Program Files \\(x86\\)/Microsoft Visual Studio/**)",
+      "Read(//mingw64/bin/**)",
+      "Read(//c/msys64/mingw64/bin/**)",
+      "Bash(rm -f App.css)",
+      "Bash(rm -rf assets/)"
+    ]
+  }
+}
