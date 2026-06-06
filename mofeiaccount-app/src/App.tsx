@@ -109,7 +109,7 @@ function App() {
         alignItems: 'center',
       }}>
         <h1 style={{ margin: 0, fontSize: 20, fontWeight: 600 }}>
-          简易记账
+          莫非记账
         </h1>
         <div style={{ display: 'flex', gap: 12, alignItems: 'center' }}>
           <span style={{ fontSize: 13, color: '#666' }}>
