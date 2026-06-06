@@ -5,14 +5,13 @@
  *   1. 弹窗打开 → 调用 Rust start_upload_server 启动 HTTP 服务
  *   2. 生成二维码（指向 http://本机IP:端口/）+ 显示访问地址文字
  *   3. 手机扫码 → 浏览器打开上传页 → 选择图片 → 上传
- *   4. Rust 端保存图片到保存目录 → 前端轮询检测 → 自动回填凭证路径
+ *   4. Rust 端保存图片到保存目录 → 前端通过 Rust 命令轮询检测新文件 → 自动回填
  *   5. 关闭弹窗 → 调用 stop_upload_server 停止服务
  */
 
 import { useEffect, useState, useRef, useCallback } from 'react';
 import { invoke } from '@tauri-apps/api/core';
 import QRCode from 'qrcode';
-import { checkExists } from '../services/excel';
 
 interface MobileUploadModalProps {
   visible: boolean;
@@ -36,7 +35,7 @@ export function MobileUploadModal({
   const [errorMsg, setErrorMsg] = useState<string>('');
   // 轮询间隔 ref
   const pollTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
-  // 已上传的文件名列表（用于去重，避免重复触发回填）
+  // 已上传的文件绝对路径集合（用于去重）
   const uploadedFilesRef = useRef<Set<string>>(new Set());
 
   /** 启动上传服务器 */
@@ -48,6 +47,8 @@ export function MobileUploadModal({
       setServerInfo(null);
       setQrDataUrl(null);
       setErrorMsg('');
+      // 重置已上传文件记录
+      uploadedFilesRef.current = new Set();
 
       // 调用 Rust 命令启动 HTTP 服务器
       const [port, ip] = await invoke<[number, string]>('start_upload_server', {
@@ -72,21 +73,23 @@ export function MobileUploadModal({
     }
   }, [visible, saveDir]);
 
-  /** 轮询检测新上传的文件 */
+  /** 轮询检测新上传的文件（通过 Rust poll_uploaded_file 命令） */
   const startPolling = useCallback(() => {
     if (pollTimerRef.current) clearInterval(pollTimerRef.current);
 
     pollTimerRef.current = setInterval(async () => {
       try {
-        // 读取存储目录下的所有文件，检查是否有新文件
-        const entries = await listFilesInDir(saveDir);
-        for (const entry of entries) {
-          // 只处理 mobile_upload_ 开头的文件（上传服务器产生的文件）
-          if (entry.startsWith('mobile_upload_') && !uploadedFilesRef.current.has(entry)) {
-            uploadedFilesRef.current.add(entry);
-            // 拼接完整路径并回传给父组件
-            const fullPath = [saveDir.replace(/\\/g, '/').replace(/\/$/, ''), entry].join('/');
-            onFileUploaded(fullPath);
+        // 调用 Rust 命令列出目录中所有 mobile_upload_ 开头的文件
+        const existingFiles = await invoke<string[]>('poll_uploaded_file', {
+          dir: saveDir,
+        });
+
+        // 检查是否有新文件
+        for (const filePath of existingFiles) {
+          if (!uploadedFilesRef.current.has(filePath)) {
+            uploadedFilesRef.current.add(filePath);
+            // 回传给父组件
+            onFileUploaded(filePath);
           }
         }
       } catch {
@@ -210,37 +213,6 @@ export function MobileUploadModal({
       </div>
     </div>
   );
-}
-
-/**
- * 列出目录下的所有文件名
- * 通过 Rust 命令 read_file_bytes 间接检测文件是否存在
- */
-async function listFilesInDir(dirPath: string): Promise<string[]> {
-  // 直接通过 checkExists 逐个检测 mobile_upload_*.{jpg,png} 模式的文件
-  // 更高效的做法：尝试常用的文件名模式
-  const files: string[] = [];
-  // 检测最近 5 分钟内可能上传的文件
-  const baseDir = dirPath.replace(/\\/g, '/').replace(/\/$/, '');
-
-  for (let i = 0; i < 60; i++) {
-    // 尝试可能的文件名组合 (时间戳从 now 往前推)
-    const ts = Date.now() - i * 1000;
-    for (const ext of ['png', 'jpg', 'jpeg']) {
-      const fname = `mobile_upload_${ts}.${ext}`;
-      const fullPath = `${baseDir}/${fname}`;
-      try {
-        if (await checkExists(fullPath)) {
-          files.push(fname);
-        }
-      } catch {
-        // 忽略
-      }
-    }
-  }
-
-  // 去重
-  return [...new Set(files)];
 }
 
 const secondaryBtnStyle: React.CSSProperties = {

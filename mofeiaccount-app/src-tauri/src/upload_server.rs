@@ -142,10 +142,27 @@ pub fn stop_upload_server() -> Result<(), String> {
     Ok(())
 }
 
-/// 轮询检查是否有新上传完成的文件（预留接口，当前由前端自行轮询文件系统）
+/// 轮询检查是否有新上传完成的文件
+/// 列出上传目录中所有 mobile_upload_ 开头的文件，返回文件绝对路径列表
 #[tauri::command]
-pub fn poll_uploaded_file() -> Result<Option<String>, String> {
-    Ok(None)
+pub fn poll_uploaded_file(dir: String) -> Result<Vec<String>, String> {
+    let dir_path = PathBuf::from(&dir);
+    if !dir_path.exists() {
+        return Ok(Vec::new());
+    }
+
+    let mut files = Vec::new();
+    if let Ok(entries) = fs::read_dir(&dir_path) {
+        for entry in entries.flatten() {
+            let name = entry.file_name();
+            let name_str = name.to_string_lossy();
+            // 只收集 mobile_upload_ 开头的文件
+            if name_str.starts_with("mobile_upload_") {
+                files.push(entry.path().to_string_lossy().to_string());
+            }
+        }
+    }
+    Ok(files)
 }
 
 /// 从 JSON 字符串中解析 base64 图片数据并保存到磁盘
